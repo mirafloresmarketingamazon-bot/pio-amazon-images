@@ -32,7 +32,23 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 INDEX = os.path.join(HERE, 'client-dhash-2026-08-26.json')
-API = 'C:/Users/miraf/projects/amazon-api-setup'
+
+# FIXED 2026-08-29 (Codex diff review [diffreview:pio-amazon-images@check_panda_forest_coverage.py:36]):
+# the old code hard-coded API to Miraf's checkout, so on any other supported user's box (Erik/box B,
+# Brian/box C) subprocess.run raised FileNotFoundError and the check always failed regardless of the
+# live coverage state. Resolve relative to the CURRENT user's home first (works for whoever is
+# actually running the check), then fall back to the known per-box candidates if that guess doesn't
+# hold a checkout -- never hard-code a single user.
+_API_CANDIDATES = [
+    os.path.join(os.path.expanduser('~'), 'projects', 'amazon-api-setup'),
+    'C:/Users/miraf/projects/amazon-api-setup',
+    'C:/Users/Erik/projects/amazon-api-setup',
+    'C:/Users/Brian/projects/amazon-api-setup',
+]
+API = next((p for p in _API_CANDIDATES if os.path.isdir(p)), None)
+if API is None:
+    print('API-CHECKOUT-MISSING - none of:', ', '.join(_API_CANDIDATES), '- cannot grade')
+    sys.exit(1)
 SKU = 'pio-pan-for'
 SLOTS = ('other_product_image_locator_7',
          'other_product_image_locator_8',
