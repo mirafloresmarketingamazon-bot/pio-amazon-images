@@ -57,11 +57,27 @@ if not os.path.exists(INDEX):
 src = {k: bytes.fromhex(v) for k, v in json.load(open(INDEX)).items()}
 
 try:
-    out = subprocess.run(['node', 'scripts/pio-read-imgs.mjs', SKU],
-                         cwd=API, capture_output=True, text=True, timeout=180).stdout
+    proc = subprocess.run(['node', 'scripts/pio-read-imgs.mjs', SKU],
+                          cwd=API, capture_output=True, text=True, timeout=180)
 except Exception as e:
     print('LISTINGS-READ-FAILED', e)
     sys.exit(1)
+
+# FIXED 2026-08-28 (Codex diff review [diffreview:pio-amazon-images@check_panda_forest_coverage.py:59]):
+# the old code took only .stdout and never inspected the exit code. If pio-read-imgs.mjs died or read
+# a PARTIAL listing after emitting even one unrelated locator line on stdout before failing, every
+# target slot missing from that partial output was read as SLOT-REMOVED (line ~83) instead of
+# UNKNOWN -- so a failed/partial Amazon read could pass this check and report ORPHANS-RESOLVED.
+# Reject the read outright when the subprocess did not exit 0; a failed/partial read must never look
+# like resolved orphans.
+assert proc.returncode is not None, 'subprocess.run did not populate a return code'
+if proc.returncode != 0:
+    print('LISTINGS-READ-FAILED - pio-read-imgs.mjs exited', proc.returncode, '(cannot trust stdout as a full read)')
+    if proc.stderr:
+        print(proc.stderr[-2000:])
+    sys.exit(1)
+
+out = proc.stdout
 
 live = {}
 for line in out.splitlines():
